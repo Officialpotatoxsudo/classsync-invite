@@ -99,13 +99,24 @@
 
       var isAndroid = /Android/i.test(navigator.userAgent);
       if (isAndroid) {
-        statusEl.textContent = "Opening ClassSync…";
-        setTimeout(function () {
-          window.location.href = appLink;
-        }, 650);
+        statusEl.textContent = "Tap Open ClassSync to continue.";
       } else {
         statusEl.textContent = "Open this link on your Android phone.";
       }
+
+      openEl.addEventListener("click", function () {
+        statusEl.textContent = "Opening ClassSync…";
+        var left = false;
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) left = true;
+        });
+        setTimeout(function () {
+          if (!left) {
+            statusEl.textContent =
+              "If ClassSync didn't open, install it first, then enter the code above.";
+          }
+        }, 1800);
+      });
 
       copyEl.addEventListener("click", function () {
         var done = function () {
