@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex">
 <title>Join your class · ClassSync</title>
 <meta property="og:title" content="Join your class · ClassSync">
-<meta property="og:description" content="Open the invite to join your class routine, photos and notes.">
+<meta property="og:description" content="Open the invite in ClassSync, or download the latest Android APK if it is not installed yet.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://officialpotatoxsudo.github.io/classsync-invite/og.png">
 <meta property="og:image:width" content="1200">
@@ -39,7 +39,7 @@
   h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.2; letter-spacing: -.02em; }
   p { margin: 0; color: #b9b4d0; font-size: 15px; line-height: 1.55; }
   .code {
-    margin: 26px 0 22px; padding: 16px; border-radius: 16px;
+    margin: 24px 0 20px; padding: 16px; border-radius: 16px;
     background: rgba(0,0,0,.28); border: 1px dashed rgba(255,255,255,.22);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 26px; font-weight: 700; letter-spacing: .28em;
@@ -52,6 +52,12 @@
     font-weight: 700; font-size: 16px;
   }
   .primary.disabled { opacity: .45; pointer-events: none; }
+  .install {
+    display: block; width: 100%; margin-top: 12px; padding: 15px; border-radius: 999px;
+    background: linear-gradient(135deg, #7c6cf6, #5b4bdb); color: #ffffff;
+    text-decoration: none; font-weight: 700; font-size: 15px;
+    box-shadow: 0 8px 24px rgba(124,108,246,.28);
+  }
   .secondary {
     margin-top: 12px; width: 100%; padding: 14px; border-radius: 999px;
     background: transparent; color: #d8d3ee; border: 1px solid rgba(255,255,255,.18);
@@ -59,7 +65,7 @@
   }
   .secondary:disabled { opacity: .4; cursor: default; }
   .hint { margin-top: 18px; font-size: 12px; color: #8d87a8; line-height: 1.5; }
-  .opening { margin-top: 14px; font-size: 12px; color: #a99fff; min-height: 16px; }
+  .opening { margin-top: 14px; font-size: 13px; color: #a99fff; min-height: 18px; }
 </style>
 </head>
 <body>
@@ -69,11 +75,12 @@
     <p id="subtitle">You've been invited to a class space on ClassSync.</p>
     <div class="code" id="code">—</div>
     <a class="primary" href="#" id="open">Open ClassSync</a>
+    <a class="install" href="https://github.com/Officialpotatoxsudo/classsync-releases/releases/latest" id="install">Install ClassSync</a>
     <button class="secondary" id="copy" type="button">Copy invite code</button>
     <div class="opening" id="status"></div>
     <p class="hint">
-      Android only. If ClassSync does not open, install it first, then enter
-      this code on the “Join your class” screen.
+      Android only. Already have ClassSync installed? It opens to confirm joining.
+      Otherwise install the app first, then open this link again or enter the code above.
     </p>
   </main>
   <script>
@@ -82,10 +89,36 @@
       var code = (params.get("code") || "").replace(/[^a-z0-9]/gi, "").toUpperCase().slice(0, 8);
       var codeEl = document.getElementById("code");
       var openEl = document.getElementById("open");
+      var installEl = document.getElementById("install");
       var copyEl = document.getElementById("copy");
       var statusEl = document.getElementById("status");
       var titleEl = document.getElementById("title");
       var subtitleEl = document.getElementById("subtitle");
+
+      var releasePageUrl = "https://github.com/Officialpotatoxsudo/classsync-releases/releases/latest";
+      var installUrl = releasePageUrl;
+      installEl.href = installUrl;
+
+      function fetchLatestApk() {
+        return fetch("https://api.github.com/repos/Officialpotatoxsudo/classsync-releases/releases/latest", {
+          headers: { Accept: "application/vnd.github+json" }
+        })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (rel) {
+            if (!rel || !Array.isArray(rel.assets)) return null;
+            var apk = rel.assets.find(function (a) {
+              return typeof a.name === "string" && a.name.toLowerCase().endsWith(".apk");
+            });
+            if (apk && apk.browser_download_url) {
+              installUrl = apk.browser_download_url;
+              installEl.href = installUrl;
+              var ver = rel.tag_name ? " (" + rel.tag_name + ")" : "";
+              installEl.textContent = "Install ClassSync APK" + ver;
+            }
+            return installUrl;
+          })
+          .catch(function () { return installUrl; });
+      }
 
       if (!code) {
         codeEl.textContent = "Invalid invite";
@@ -93,33 +126,75 @@
         openEl.classList.add("disabled");
         copyEl.disabled = true;
         titleEl.textContent = "Invalid invite link";
-        subtitleEl.textContent = "Ask your class admin to share the invite again.";
+        subtitleEl.textContent = "You can still install ClassSync below and ask your class admin for a fresh invite.";
+        fetchLatestApk();
         return;
       }
 
-      var appLink = "classsync://join/" + code;
       codeEl.textContent = code;
-      openEl.href = appLink;
-
-      var isAndroid = /Android/i.test(navigator.userAgent);
-      if (isAndroid) {
-        statusEl.textContent = "Tap Open ClassSync to continue.";
-      } else {
-        statusEl.textContent = "Open this link on your Android phone.";
+      var customSchemeUrl = "classsync://join/" + code;
+      function buildIntentUrl(fallback) {
+        return "intent://join/" + code +
+          "#Intent;scheme=classsync;package=com.kriman.classsync;" +
+          "S.browser_fallback_url=" + encodeURIComponent(fallback) + ";end";
       }
 
-      openEl.addEventListener("click", function () {
+      function refreshLinks() {
+        openEl.href = /Android/i.test(navigator.userAgent)
+          ? buildIntentUrl(installUrl)
+          : customSchemeUrl;
+      }
+      refreshLinks();
+
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var left = false;
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) left = true;
+      });
+
+      function launchAppOrRedirectToInstall() {
+        refreshLinks();
         statusEl.textContent = "Opening ClassSync…";
-        var left = false;
-        document.addEventListener("visibilitychange", function () {
-          if (document.hidden) left = true;
-        });
-        setTimeout(function () {
-          if (!left) {
-            statusEl.textContent =
-              "If ClassSync didn't open, install it first, then enter the code above.";
+        if (isAndroid) {
+          window.location.href = buildIntentUrl(installUrl);
+          setTimeout(function () {
+            if (!left) {
+              statusEl.textContent = "ClassSync not installed — redirecting to download…";
+              window.location.href = installUrl;
+            }
+          }, 1500);
+        } else {
+          window.location.href = customSchemeUrl;
+        }
+      }
+
+      openEl.addEventListener("click", function (e) {
+        e.preventDefault();
+        left = false;
+        launchAppOrRedirectToInstall();
+      });
+
+      Promise.race([
+        fetchLatestApk().then(function () { refreshLinks(); }),
+        new Promise(function (resolve) { setTimeout(resolve, 550); })
+      ]).then(function () {
+        refreshLinks();
+        if (!isAndroid) {
+          statusEl.textContent = "Scan or open on your Android phone to join automatically.";
+          return;
+        }
+        statusEl.textContent = "Checking for ClassSync…";
+        var key = "classsync_invite_tried_" + code;
+        try {
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, "1");
+            launchAppOrRedirectToInstall();
+          } else {
+            statusEl.textContent = "Tap Open ClassSync if installed, or Install ClassSync below.";
           }
-        }, 1800);
+        } catch (_) {
+          launchAppOrRedirectToInstall();
+        }
       });
 
       copyEl.addEventListener("click", function () {
